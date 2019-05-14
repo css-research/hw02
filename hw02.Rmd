@@ -33,6 +33,12 @@ congress_val = read_csv(here("Data", "congress_val.csv"))
 ## Prepare Data
 ```{r prepare-data, cache=TRUE}
 max_words = 10000
+max_length = 100
+input_train = congress_train$Title
 tokenizer = text_tokenizer(num_words = max_words) 
-tokenizer %>% fit_text_tokenizer(congress_train$Title)
+tokenizer %>% fit_text_tokenizer(input_train)
+sequences = texts_to_sequences(tokenizer, input_train)
+word_indices = tokenizer$word_index
+word_counts = tokenizer$word_counts
+data = pad_sequences(sequences, max_length)
 ```
