@@ -1,0 +1,38 @@
+---
+title: "Homework 2"
+author: "Adam Shelton"
+date: "5/13/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,fig.width=10, fig.height=7, dev = "cairo_pdf", tidy.opts=list(width.cutoff=60), tidy=TRUE)
+
+library(tidyverse)
+library(keras)
+library(tensorflow)
+library(knitr)
+library(Cairo)
+library(stats)
+library(here)
+library(tidytext)
+
+set.seed(60615)
+windows.options(antialias = "cleartype")
+options(device = Cairo::CairoWin)
+```
+
+## Loading Data
+
+```{r loading-data, cache=TRUE}
+congress_test = read_csv(here("Data", "congress_test.csv"))
+congress_train = read_csv(here("Data", "congress_train.csv"))
+congress_val = read_csv(here("Data", "congress_val.csv"))
+```
+
+## Prepare Data
+```{r prepare-data, cache=TRUE}
+max_words = 10000
+tokenizer = text_tokenizer(num_words = max_words) 
+tokenizer %>% fit_text_tokenizer(congress_train$Title)
+```
