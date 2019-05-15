@@ -10,35 +10,150 @@ knitr::opts_chunk$set(echo = TRUE,fig.width=10, fig.height=7, dev = "cairo_pdf",
 
 library(tidyverse)
 library(keras)
-library(tensorflow)
 library(knitr)
 library(Cairo)
 library(stats)
 library(here)
-library(tidytext)
 
 set.seed(60615)
-windows.options(antialias = "cleartype")
-options(device = Cairo::CairoWin)
+if(Sys.info()[1] == "Windows") {
+  windows.options(antialias = "cleartype")
+  options(device = Cairo::CairoWin)
+} else {
+  options(device = Cairo::CairoPDF)
+}
+
 ```
 
 ## Loading Data
 
 ```{r loading-data, cache=TRUE}
-congress_test = read_csv(here("Data", "congress_test.csv"))
-congress_train = read_csv(here("Data", "congress_train.csv"))
-congress_val = read_csv(here("Data", "congress_val.csv"))
+congress_test = read_csv(here("data", "congress_test.csv"))
+congress_train = read_csv(here("data", "congress_train.csv"))
+congress_val = read_csv(here("data", "congress_val.csv"))
 ```
 
 ## Prepare Data
-```{r prepare-data, cache=TRUE}
+```{r prepare-data}
 max_words = 10000
 max_length = 100
-input_train = congress_train$Title
-tokenizer = text_tokenizer(num_words = max_words) 
-tokenizer %>% fit_text_tokenizer(input_train)
-sequences = texts_to_sequences(tokenizer, input_train)
-word_indices = tokenizer$word_index
-word_counts = tokenizer$word_counts
-data = pad_sequences(sequences, max_length)
+x_train = congress_train$Title[1:270000]
+y_train = congress_train$Major[1:270000] %>% as.numeric()
+tokenizer_train = text_tokenizer(num_words = max_words) %>% fit_text_tokenizer(x_train)
+sequences_train = texts_to_sequences(tokenizer_train, x_train)
+data_train = pad_sequences(sequences_train, max_length)
+```
+
+```{r prepare-valid-data}
+x_valid = congress_val$Title
+y_valid = congress_val$Major %>% as.numeric()
+tokenizer_valid = text_tokenizer(num_words = max_words) %>% fit_text_tokenizer(x_valid)
+sequences_valid = texts_to_sequences(tokenizer_valid, x_valid)
+data_valid = pad_sequences(sequences_valid, max_length)
+```
+
+```{r prepare-testing-data}
+x_test = congress_test$Title
+y_test = congress_test$Major %>% as.numeric()
+tokenizer_test = text_tokenizer(num_words = max_words) %>% fit_text_tokenizer(x_test)
+sequences_test = texts_to_sequences(tokenizer_valid, x_test)
+data_test = pad_sequences(sequences_test, max_length)
+```
+
+## Initial Model 
+```{r init-model, cache=TRUE}
+init_model = keras_model_sequential() %>% 
+  layer_embedding(input_dim = max_words, output_dim = length(unique(congress_train$Major)), input_length = max_length) %>% 
+  layer_flatten() %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+
+init_model %>% compile(optimizer = "rmsprop",
+                       loss = "binary_crossentropy",
+                       metrics = c("acc")
+)
+
+summary(init_model)
+
+init_history = init_model %>% fit(data_train, y_train, epochs = 20, batch_size = 32, validation_data = list(data_valid, y_valid))
+
+plot(init_history)
+```
+
+## Simple RNN
+```{r simple-rnn, cache=TRUE}
+simple_rnn = keras_model_sequential() %>% 
+  layer_embedding(input_dim = max_words, output_dim = 32, input_length = max_length) %>% 
+  layer_simple_rnn(units = 32) %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+simple_rnn %>% compile(optimizer = "rmsprop",
+                       loss = "binary_crossentropy",
+                       metrics = c("acc")
+)
+
+summary(simple_rnn)
+
+srnn_history = simple_rnn %>% fit(data_train, y_train, epochs = 20, batch_size = 32, validation_data = list(data_valid, y_valid))
+
+plot(srnn_history)
+```
+
+## RNN with LSTM Layer
+```{r ltsm, cache=TRUE}
+lstm_model = keras_model_sequential() %>% 
+  layer_embedding(input_dim = max_words, output_dim = 32, input_length = max_length) %>% 
+  layer_lstm(units = 32) %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+lstm_model %>% compile(optimizer = "rmsprop",
+                       loss = "binary_crossentropy",
+                       metrics = c("acc")
+)
+
+summary(lstm_model)
+
+lstm_history = lstm_model %>% fit(data_train, y_train, epochs = 20, batch_size = 32, validation_data = list(data_valid, y_valid))
+
+plot(lstm_history)
+```
+
+## RNN with GRU Layer
+```{r gru, eval=FALSE, cache=TRUE, include=FALSE}
+gru_model = keras_model_sequential() %>% 
+  layer_gru(units = 32, input_shape = list(NULL, dim(data_train)[[-1]] )) %>% 
+  layer_dense(units = 1)
+
+gru_model %>% compile(optimizer = "rmsprop",
+                       loss = "mae",
+                       metrics = c("acc")
+)
+
+summary(gru_model)
+
+gru_history = gru_model %>% fit(data_train, y_train, epochs = 20, batch_size = 32, validation_data = list(data_valid, y_valid))
+
+plot(gru_history)
+```
+
+## Hyperparameter Tuning
+```{r ltsm, cache=TRUE}
+tune_grid = expand.grid(output_dim = c(16, 32, 64), batch_size = c(32, 64))
+
+for (option in tune_grid) {
+  lstm_model = keras_model_sequential() %>% 
+  layer_embedding(input_dim = max_words, output_dim = option$output_dim, input_length = max_length) %>% 
+  layer_lstm(units = option$output_dim) %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+  lstm_model %>% compile(optimizer = "rmsprop",
+                       loss = "binary_crossentropy",
+                       metrics = c("acc")
+  )
+
+  summary(lstm_model)
+
+  lstm_history = lstm_model %>% fit(data_train, y_train, epochs = 10, batch_size = option$batch_size, validation_data = list(data_valid, y_valid))
+
+  plot(lstm_history)
+}
 ```
