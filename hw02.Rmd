@@ -136,7 +136,7 @@ plot(gru_history)
 ```
 
 ## Hyperparameter Tuning
-```{r ltsm, cache=TRUE}
+```{r hp-tuning, cache=TRUE}
 tune_grid = expand.grid(output_dim = c(16, 32, 64), batch_size = c(32, 64))
 
 for (option in tune_grid) {
